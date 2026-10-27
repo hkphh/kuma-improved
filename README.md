@@ -3,6 +3,8 @@
 Модульное расширение для браузера, объединяющее несколько независимых
 инструментов для SIEM KUMA.
 
+<img width="347" height="385" alt="image" src="https://github.com/user-attachments/assets/3656671b-9078-48e8-91f3-94b044abaaf0" />
+
 Сейчас в составе три модуля:
 
 | Модуль | Что делает |
@@ -103,6 +105,8 @@ docs/
 
 ## Модуль «Тестер функций KUMA»
 
+<img width="677" height="356" alt="image" src="https://github.com/user-attachments/assets/e470115b-21a8-4acf-a862-8260b0942381" />
+
 Кнопка появляется только на маршруте:
 
 ```
@@ -140,6 +144,8 @@ https://<host>/resources#/resources/correlationRule/<uuid>
 
 ## Модуль «Расширение периода событий»
 
+<img width="372" height="405" alt="image" src="https://github.com/user-attachments/assets/d73fc521-55d2-44ac-bab5-ca65d48aab35" />
+
 В выпадающем календаре периода на странице событий появляется блок
 «Расширить период» с кнопками `±5 мин`, `±15 мин`, `±30 мин`, `±1 ч`.
 
@@ -161,6 +167,11 @@ https://<host>/resources#/resources/correlationRule/<uuid>
 этих полей, поэтому не ломает grid-раскладку календаря.
 
 ---
+
+# Модуль «Process Tree»
+
+<img width="1718" height="838" alt="image" src="https://github.com/user-attachments/assets/f6f56738-70b8-4370-b5d7-f9d5f2e24f4d" />
+
 
 ## Ограничения
 
