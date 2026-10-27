@@ -1,0 +1,24 @@
+{
+  "id": "time-range",
+  "name": "Расширение периода событий",
+  "description": "Добавляет в календарь периода кнопки ±5, 15, 30 и 60 минут: «Дата от» сдвигается назад, «Дата до» — вперёд.",
+  "version": "0.1.1",
+  "defaultEnabled": true,
+  "runAt": "document_idle",
+  "allFrames": false,
+  "files": {
+    "js": ["modules/time-range/content.js"],
+    "css": []
+  },
+  "settings": {
+    "intervals": "5, 15, 30, 60"
+  },
+  "settingsSchema": [
+    {
+      "key": "intervals",
+      "type": "text",
+      "label": "Интервалы, минуты",
+      "hint": "Список через запятую. Кнопка расширяет период на указанное число минут: «Дата от» — назад, «Дата до» — вперёд. Относительные значения (now, now-2d) не изменяются."
+    }
+  ]
+}

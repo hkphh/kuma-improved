@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KUMA Extended — настройки</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="page">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">KE</div>
+        <div>
+          <h1>KUMA Extended</h1>
+          <p class="muted">Модульное расширение для SIEM</p>
+        </div>
+      </div>
+      <div class="top-actions">
+        <span id="saveStatus" class="status"></span>
+        <span id="version" class="badge"></span>
+      </div>
+    </header>
+
+    <main>
+      <section class="card">
+        <div class="card-head">
+          <div>
+            <h2>Общие</h2>
+            <p class="hint">Главный выключатель расширения. Если он выключен, content-скрипты модулей не регистрируются ни на одном домене.</p>
+          </div>
+          <label class="switch" title="Включить/выключить расширение">
+            <input type="checkbox" id="globalEnabled">
+            <span class="track"></span>
+          </label>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <div>
+            <h2>Целевые домены</h2>
+            <p class="hint">
+              Расширение работает исключительно на перечисленных FQDN. Можно указать полный URL —
+              из него будет взят только host. Путь ограничивает работу конкретным разделом сайта.
+            </p>
+          </div>
+          <span id="targetCount" class="badge"></span>
+        </div>
+
+        <form id="addTarget" class="add-form" autocomplete="off">
+          <div class="field grow">
+            <label for="targetHost">FQDN или URL</label>
+            <input id="targetHost" type="text" placeholder="kuma.example.com или https://kuma.example.com/resources" required>
+          </div>
+          <div class="field">
+            <label for="targetScheme">Схема</label>
+            <select id="targetScheme">
+              <option value="*">http + https</option>
+              <option value="https">только https</option>
+              <option value="http">только http</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="targetPath">Путь (необязательно)</label>
+            <input id="targetPath" type="text" placeholder="/resources">
+          </div>
+          <button type="submit" class="primary">Добавить</button>
+        </form>
+
+        <div id="targetsList" class="list"></div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <div>
+            <h2>Модули</h2>
+            <p class="hint">Каждый модуль автономен. Тумблер выключает модуль полностью: его content-скрипты перестают регистрироваться.</p>
+          </div>
+          <span id="moduleCount" class="badge"></span>
+        </div>
+        <div id="modulesList" class="modules"></div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <div>
+            <h2>Добавление модулей</h2>
+            <p class="hint">Модуль — это папка в <code>modules/</code> с манифестом <code>module.json</code>, зарегистрированная в <code>modules/registry.json</code>.</p>
+          </div>
+        </div>
+        <details class="help">
+          <summary>Как добавить новый модуль</summary>
+          <ol>
+            <li>Создайте папку <code>modules/&lt;id&gt;/</code>.</li>
+            <li>Опишите модуль в <code>module.json</code>: имя, файлы, настройки по умолчанию и схему настроек.</li>
+            <li>Добавьте <code>&lt;id&gt;</code> в массив <code>modules</code> файла <code>modules/registry.json</code>.</li>
+            <li>Перезагрузите расширение на странице <code>chrome://extensions</code>.</li>
+          </ol>
+          <p>Пример <code>module.json</code>:</p>
+          <pre>{
+  "id": "my-module",
+  "name": "Мой модуль",
+  "description": "Что делает модуль",
+  "defaultEnabled": true,
+  "runAt": "document_idle",
+  "files": {
+    "js": ["modules/my-module/content.js"],
+    "css": []
+  },
+  "settings": { "someOption": true },
+  "settingsSchema": [
+    { "key": "someOption", "type": "boolean", "label": "Опция" }
+  ]
+}</pre>
+          <p>Подробности — в <code>docs/ADDING_MODULES.md</code> репозитория.</p>
+        </details>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <div>
+            <h2>Данные</h2>
+            <p class="hint">Экспорт и импорт настроек, полный сброс.</p>
+          </div>
+        </div>
+        <div class="row">
+          <button id="exportBtn" class="ghost" type="button">Экспорт JSON</button>
+          <button id="importBtn" class="ghost" type="button">Импорт JSON</button>
+          <input id="importFile" type="file" accept="application/json,.json" hidden>
+          <button id="resetBtn" class="danger" type="button">Сбросить всё</button>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>KUMA Extended</span>
+      <span class="muted">Настройки применяются автоматически</span>
+    </footer>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="options.js"></script>
+</body>
+</html>

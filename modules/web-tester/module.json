@@ -1,0 +1,40 @@
+{
+  "id": "web-tester",
+  "name": "Тестер функций KUMA",
+  "description": "Кнопка в панели переменных правила корреляции и окно для проверки выражений KUMA.",
+  "version": "0.3.1",
+  "defaultEnabled": true,
+  "runAt": "document_idle",
+  "allFrames": false,
+  "files": {
+    "js": [
+      "modules/web-tester/tester-core.js",
+      "modules/web-tester/content.js"
+    ],
+    "css": []
+  },
+  "settings": {
+    "routePattern": "#/resources/correlationRule/[0-9a-fA-F-]{16,}",
+    "buttonText": "Function Tester",
+    "persistState": true
+  },
+  "settingsSchema": [
+    {
+      "key": "routePattern",
+      "type": "text",
+      "label": "Regex маршрута страницы",
+      "hint": "Проверяется по pathname + search + hash. Кнопка появляется только на подходящих страницах."
+    },
+    {
+      "key": "buttonText",
+      "type": "text",
+      "label": "Текст кнопки в панели"
+    },
+    {
+      "key": "persistState",
+      "type": "boolean",
+      "label": "Запоминать выражение и переменные",
+      "hint": "Сохраняет последнее состояние тестера в локальном хранилище расширения."
+    }
+  ]
+}

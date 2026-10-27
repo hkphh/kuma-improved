@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>KUMA Extended</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header class="head">
+    <div class="logo">KE</div>
+    <div class="titles">
+      <div class="title">KUMA Extended</div>
+      <div class="subtitle" id="version"></div>
+    </div>
+    <label class="switch" title="Включить/выключить расширение">
+      <input type="checkbox" id="globalEnabled">
+      <span class="track"></span>
+    </label>
+  </header>
+
+  <section class="site">
+    <div class="host" id="host">—</div>
+    <div class="site-row">
+      <span class="state" id="siteState">Проверка…</span>
+      <button type="button" class="small" id="addHost">Добавить домен</button>
+    </div>
+  </section>
+
+  <section class="modules">
+    <div class="section-title">
+      <span>Модули</span>
+      <span class="count" id="moduleCount">0</span>
+    </div>
+    <div id="modulesList" class="module-list"></div>
+  </section>
+
+  <footer class="foot">
+    <button type="button" class="link" id="openOptions">Все настройки</button>
+    <span class="hint" id="footHint"></span>
+  </footer>
+
+  <div class="toast" id="toast"></div>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,31 @@
+{
+  "id": "process-tree",
+  "name": "Дерево процессов",
+  "description": "Перехватывает ответы API событий KUMA и строит граф процессов (4688 / 4689).",
+  "version": "0.4.2",
+  "defaultEnabled": true,
+  "runAt": "document_start",
+  "allFrames": true,
+  "files": {
+    "js": ["modules/process-tree/content.js"],
+    "css": []
+  },
+  "settings": {
+    "apiPathPattern": "/api/private/events",
+    "sameOriginOnly": true
+  },
+  "settingsSchema": [
+    {
+      "key": "apiPathPattern",
+      "type": "text",
+      "label": "Шаблон URL API (regex)",
+      "hint": "Запросы, URL которых соответствует этому выражению, считаются потоком событий."
+    },
+    {
+      "key": "sameOriginOnly",
+      "type": "boolean",
+      "label": "Читать только запросы текущего origin",
+      "hint": "Дополнительная защита: перехватываться будут только same-origin запросы."
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "modules": [
+    "process-tree",
+    "web-tester",
+    "time-range"
+  ]
+}
