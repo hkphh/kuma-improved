@@ -3,7 +3,7 @@
 Модульное расширение для браузера, объединяющее несколько независимых
 инструментов для SIEM KUMA.
 
-<img width="347" height="385" alt="image" src="https://github.com/user-attachments/assets/3656671b-9078-48e8-91f3-94b044abaaf0" />
+<img width="346" height="387" alt="image" src="https://github.com/user-attachments/assets/29c215b1-f20a-4643-b91e-bae7d72ba4e6" />
 
 В составе три модуля:
 
