@@ -22,7 +22,7 @@
 
   const DEFAULT_SETTINGS = {
     routePattern: '#/resources/correlationRule/[0-9a-fA-F-]{16,}',
-    buttonText: 'Function Tester',
+    buttonText: 'Function sandbox',
     persistState: true
   };
 
