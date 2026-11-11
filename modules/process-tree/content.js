@@ -852,6 +852,7 @@
     });
     // Данные узла — для поиска и перехода к совпадению.
     g.__data = dn;
+    g.__real = real;
 
     g.appendChild(svgEl('rect', { x: 0, y: 0, width: NODE_W, height: NODE_H, rx: 8, ry: 8 }));
 
