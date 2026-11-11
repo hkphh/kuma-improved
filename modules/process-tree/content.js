@@ -171,7 +171,7 @@
 
     // Коллекция заменена целиком — граф и счётчик всегда пересобираем,
     // иначе на экране остались бы процессы из прошлого запроса.
-    if (badgeEl) badgeEl.textContent = String(eventsById.size);
+    updateButton();
     if (overlayEl) rerender();
   }
 
