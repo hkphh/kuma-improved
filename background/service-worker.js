@@ -1,5 +1,5 @@
 /**
- * Service worker KUMA Extended.
+ * Service worker KUMA Improved.
  *
  * Отвечает за:
  *  - нормализацию пользовательских настроек;
@@ -31,7 +31,7 @@ function registrationStampOf(settings) {
 
 function enqueue(task) {
   queue = queue.then(task).catch((error) => {
-    console.error('[KUMA Extended] sync failed:', error);
+    console.error('[KUMA Improved] sync failed:', error);
   });
   return queue;
 }
@@ -176,10 +176,12 @@ async function syncRegistrations(registry, settings) {
   const desired = buildDesiredScripts(registry, settings);
   const desiredById = new Map(desired.map((script) => [script.id, script]));
 
-  // "kuma-ext:" — идентификаторы первой версии; их нужно вычистить,
-  // чтобы после обновления не осталось двух наборов content-скриптов.
+  // "kuma-ext--" и "kuma-ext:" — идентификаторы прежнего имени (KUMA Extended);
+  // их нужно вычистить, чтобы после обновления не осталось двух наборов content-скриптов.
   const isOwnScriptId = (id) =>
-    id.startsWith(MODULE_SCRIPT_PREFIX) || id.startsWith('kuma-ext:');
+    id.startsWith(MODULE_SCRIPT_PREFIX) ||
+    id.startsWith('kuma-ext--') ||
+    id.startsWith('kuma-ext:');
 
   const existing = (await chrome.scripting.getRegisteredContentScripts())
     .filter((script) => isOwnScriptId(script.id));
@@ -203,12 +205,12 @@ async function syncRegistrations(registry, settings) {
   try {
     await chrome.scripting.registerContentScripts(toAdd);
   } catch (error) {
-    console.warn('[KUMA Extended] пакетная регистрация не удалась, пробуем по одному:', error);
+    console.warn('[KUMA Improved] пакетная регистрация не удалась, пробуем по одному:', error);
     for (const script of toAdd) {
       try {
         await chrome.scripting.registerContentScripts([script]);
       } catch (inner) {
-        console.error(`[KUMA Extended] не удалось зарегистрировать ${script.id}`, inner);
+        console.error(`[KUMA Improved] не удалось зарегистрировать ${script.id}`, inner);
       }
     }
   }

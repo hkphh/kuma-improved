@@ -1,5 +1,5 @@
 /**
- * Общие настройки и утилиты KUMA Extended.
+ * Общие настройки и утилиты KUMA Improved.
  *
  * Модуль используется service worker'ом, страницей настроек и popup'ом.
  * Content-скрипты модулей не импортируют его (они живут в изолированном мире
@@ -8,7 +8,7 @@
 
 export const SETTINGS_KEY = 'settings';
 export const RUNTIME_KEY = 'runtime';
-export const MODULE_SCRIPT_PREFIX = 'kuma-ext--';
+export const MODULE_SCRIPT_PREFIX = 'kuma-improved--';
 export const SETTINGS_VERSION = 1;
 
 export const DEFAULT_SETTINGS = {
@@ -139,7 +139,7 @@ export async function loadRegistry() {
       mod.settings = mod.settings && typeof mod.settings === 'object' ? mod.settings : {};
       modules.push(mod);
     } catch (error) {
-      console.warn(`[KUMA Extended] модуль "${id}" не загружен:`, error);
+      console.warn(`[KUMA Improved] модуль "${id}" не загружен:`, error);
     }
   }
 
