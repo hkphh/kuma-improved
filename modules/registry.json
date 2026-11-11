@@ -2,6 +2,7 @@
   "modules": [
     "process-tree",
     "web-tester",
-    "time-range"
+    "time-range",
+    "sound-alert"
   ]
 }

@@ -21,9 +21,7 @@ CSS-файлы, перечисленные в `files.css`, будут внедр
 content-script стили. Для UI предпочтительнее Shadow DOM — тогда стили страницы
 не влияют на модуль, а модуль не влияет на страницу.
 
-## 2. Опишите `module.json`
-
-```json
+## 2. Опишите `module.json````json
 {
   "id": "my-module",
   "name": "Мой модуль",
@@ -85,7 +83,7 @@ content-script стили. Для UI предпочтительнее Shadow DOM
   "modules": [
     "process-tree",
     "web-tester",
-    "my-module"
+    "sound-alert"
   ]
 }
 ```
@@ -150,6 +148,32 @@ function routeMatches(pattern) {
   return new RegExp(pattern, 'i').test(haystack);
 }
 ```
+
+### Фоновые события от KUMA
+
+Часть данных KUMA отдаёт не по HTTP-запросу, а через Server-Sent Events:
+например, `api/private/notifications/feed` присылает новые алерты и задачи.
+Такое соединение не видно в `fetch`/`XMLHttpRequest`, а своего потока у
+вкладки может не быть вовсе — его держит только вкладка-лидер.
+
+Если модулю нужны эти события, проще всего поднять собственное соединение
+в MAIN-мире (`inject.js`). Пример — модуль `sound-alert`: `EventSource`
+к тому же адресу, фильтр по `kind`, передача в content-скрипт через
+`CustomEvent` с `detail`-строкой. Подробности формата — в
+[KUMA_ALERT_NOTIFICATIONS.md](KUMA_ALERT_NOTIFICATIONS.md).
+
+Если же модуль перехватывает `fetch`/XHR, помните: две прямые подмены
+`window.fetch` теряют друг друга, а повторный инжект наматывает цепочку.
+Сейчас так работает `process-tree` (переприсваивает `fetch`). Ориентируйтесь
+на его пример:
+
+* ставьте guard `window.__myModuleHooked` и флаг на своей обёртке, чтобы не
+  оборачивать дважды;
+* берите текущее значение `window.fetch` на момент установки, а не сохранённое
+  заранее «нативное»;
+* передавайте данные в content-скрипт через `CustomEvent` с `detail`-строкой —
+  событие дойдёт до всех экземпляров content-скрипта, даже перезагруженных;
+* не меняйте промис и тело ответа: используйте `response.clone()`.
 
 ---
 

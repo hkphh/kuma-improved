@@ -1,0 +1,31 @@
+{
+  "id": "sound-alert",
+  "name": "Звуковое оповещение",
+  "description": "Подписывается на поток уведомлений KUMA (SSE) и проигрывает alert.mp3 при каждом новом алерте.",
+  "version": "0.5.0",
+  "defaultEnabled": true,
+  "runAt": "document_start",
+  "allFrames": false,
+  "files": {
+    "js": ["modules/sound-alert/content.js"],
+    "css": []
+  },
+  "settings": {
+    "feedPath": "/api/private/notifications/feed",
+    "volume": 70
+  },
+  "settingsSchema": [
+    {
+      "key": "feedPath",
+      "type": "text",
+      "label": "Путь потока уведомлений",
+      "hint": "SSE-адрес KUMA. Модуль открывает к нему собственное соединение EventSource и слушает события kind = alert."
+    },
+    {
+      "key": "volume",
+      "type": "number",
+      "label": "Громкость, %",
+      "hint": "0–100. Громкость сигнала alert.mp3, а не системы."
+    }
+  ]
+}
