@@ -112,16 +112,14 @@
     };
   }
 
-  /* ---------- Повтор запроса по требованию content-script ---------- */
+  /* -------------------- Повтор запроса по требованию content-script -------------------- */
   window.addEventListener('__siem_tree_refetch__', function () {
     function done() {
-      window.dispatchEvent(new CustomEvent('__siem_events__', {
-        detail: JSON.stringify({
-          url: lastRequest ? lastRequest.url : '',
-          data: [],
-          __refetchDone: true
-        })
-      }));
+      // Отдельное событие, только для этого модуля: через __siem_events__
+      // общается process-tree, и сигнал «запрос завершён» ему не нужен.
+      try {
+        window.dispatchEvent(new Event('__siem_tree_refetch_done__'));
+      } catch (e) {}
     }
 
     if (!enabled || !lastRequest) { done(); return; }

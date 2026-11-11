@@ -54,13 +54,21 @@
   injectHook();
 
   /* ==================== 2. Состояние ==================== */
-  const eventsById = new Map();      // события 4688 и 4689
+  // Только последний запрос: каждая пачка событий из API полностью заменяет
+  // предыдущую. Иначе в графе копятся события из прошлых поисков и страниц.
+  let eventsById = new Map();        // события 4688 и 4689 последнего запроса
+  let lastPayload = null;            // последний ответ API (для перерисовки)
   const expandedGroups = new Set();  // раскрытые группы
   let hideSvchost = false;           // фильтр svchost-листьев
-  let loading = false;               // идёт получение событий после клика
+  let loading = false;               // идёт запрос событий после клика
   let btnEl = null;
   let badgeEl = null;
   let overlayEl = null;
+
+  // Поиск по графу: подсвечивает совпавшие узлы, но ничего не скрывает.
+  let searchQuery = '';          // текущая строка поиска
+  let searchMatches = new Set(); // DOM-узлы графа, попавшие под запрос
+  let searchIndex = 0;           // выбранное совпадение (переход по Enter)
 
   /* ---------- Применение настроек из runtime-конфига ---------- */
   function targetAllowed(runtime) {
@@ -112,21 +120,42 @@
     });
   } catch (e) {}
 
-  window.addEventListener('__siem_events__', function (ev) {
+  window.addEventListener('__siem_tree_refetch_done__', function () {
     if (!active) return;
+    loading = false;
+    if (overlayEl) rerender();
+  });
 
+  window.addEventListener('__siem_events__', function (ev) {
     let payload;
     try { payload = JSON.parse(ev.detail); } catch (e) { return; }
+    if (!payload) return;
 
-    if (payload && payload.__refetchDone) {
+    // Результат повторного запроса по кнопке приходит отдельным событием.
+    // Старые варианты модуля помечали его в __siem_events__ — учитываем.
+    if (payload.__refetchDone) {
       loading = false;
       if (overlayEl) rerender();
       return;
     }
 
-    const items = extractItems(payload && payload.data);
-    let added = 0;
-    for (const it of items) {
+    if (!active) {
+      console.warn('[SIEM Tree] ответ API пришёл, но модуль выключен');
+      return;
+    }
+
+    // Свежий ответ API страницы: он становится единственным источником событий.
+    setSnapshot(payload.data);
+  });
+
+  /**
+   * Полностью заменяет набор событий данными последнего запроса.
+   * События из прошлых запросов, поисков и страниц отбрасываются.
+   */
+  function setSnapshot(data) {
+    lastPayload = data;
+    const next = new Map();
+    for (const it of extractItems(data)) {
       if (!it || typeof it !== 'object') continue;
 
       // Фильтр: только 4688 (создание) и 4689 (завершение)
@@ -135,18 +164,16 @@
 
       const id = it.ID || it.ExternalID ||
         [it.DeviceHostName, it.DeviceCustomString5, it.Timestamp, it.DeviceCustomString4].join('|');
-      if (!eventsById.has(id)) {
-        eventsById.set(id, it);
-        added++;
-      }
+      if (!next.has(id)) next.set(id, it);
     }
 
-    if (added) {
-      loading = false;
-      updateButton();
-      if (overlayEl) rerender();
-    }
-  });
+    eventsById = next;
+
+    // Коллекция заменена целиком — граф и счётчик всегда пересобираем,
+    // иначе на экране остались бы процессы из прошлого запроса.
+    if (badgeEl) badgeEl.textContent = String(eventsById.size);
+    if (overlayEl) rerender();
+  }
 
   function extractItems(data) {
     if (!data) return [];
@@ -175,14 +202,19 @@
   }
 
   function onBuildClick() {
-    // Каждый клик — очистка + повторный запрос
-    eventsById.clear();
+    // Каждый клик — построение из самого свежего запроса. Если с момента
+    // последнего ответа API ничего не менялось, повторный запрос не нужен.
     expandedGroups.clear();
-    if (badgeEl) badgeEl.textContent = '0';
+
+    if (eventsById.size > 0 && lastPayload) {
+      openOverlay();
+      return;
+    }
 
     loading = true;
-    window.dispatchEvent(new CustomEvent('__siem_tree_refetch__'));
+    if (badgeEl) badgeEl.textContent = '0';
     openOverlay();
+    window.dispatchEvent(new CustomEvent('__siem_tree_refetch__'));
 
     // Страховка, если refetch не отдал ответ
     setTimeout(function () {
@@ -491,6 +523,8 @@
         '<h2>Дерево процессов</h2>' +
         '<span class="cnt">событий: <b id="__siem_tree_cnt__">0</b></span>' +
         '<div class="spacer"></div>' +
+        '<input class="srch" id="__siem_tree_search__" type="search" placeholder="Поиск: имя, путь, PID, хост, пользователь…" spellcheck="false">' +
+        '<span class="srch-res" id="__siem_tree_search_res__"></span>' +
         '<button class="act" data-act="svchost">Спрятать svchost</button>' +
         '<button class="act" data-act="reset">Сбросить вид</button>' +
         '<button class="act" data-act="close">Закрыть ✕</button>' +
@@ -515,6 +549,30 @@
       view.scale = 1; view.tx = 20; view.ty = 20;
       applyTransform();
     });
+
+    const searchInput = overlayEl.querySelector('#__siem_tree_search__');
+    searchInput.value = searchQuery;
+    searchInput.addEventListener('input', function () {
+      searchQuery = searchInput.value;
+      searchIndex = 0;
+      applySearchHighlight();
+    });
+    searchInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        searchInput.value = '';
+        searchQuery = '';
+        applySearchHighlight();
+        return;
+      }
+      // Enter / Shift+Enter — переход к следующему или предыдущему совпадению.
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        stepSearch(e.shiftKey ? -1 : 1);
+      }
+    });
+
+    searchMatches.clear();
 
     const viewport = overlayEl.querySelector('#__siem_tree_viewport__');
 
@@ -576,6 +634,132 @@
     const cntEl = overlayEl.querySelector('#__siem_tree_cnt__');
     if (cntEl) cntEl.textContent = String(eventsById.size);
     renderGraph(viewport, orphanBox, tooltip);
+    // После каждой перерисовки заново накладываем подсветку поиска.
+    applySearchHighlight();
+  }
+
+  /* ==================== 7.1 Поиск по графу ==================== */
+
+  /** Поля процесса, по которым проверяется строка поиска.
+   *  Регистр не важен, строка ищется как подстрока в любом поле. */
+  function searchHaystack(n) {
+    const ev = n.event || {};
+    return [
+      n.name,
+      n.fullPath,
+      n.cmd,
+      n.parentName,
+      n.host,
+      n.user,
+      hex(n.pid),
+      String(n.pid),
+      n.ppid ? hex(n.ppid) : '',
+      n.ppid ? String(n.ppid) : '',
+      ev.Name,
+      ev.DeviceEventClassID,
+      ev.SourceProcessName,
+      ev.SourceUserName,
+      ev.SourceAccountName,
+      ev.DeviceAddress,
+      ev.DeviceHostName,
+      ev.DeviceCustomString1,
+      ev.DeviceCustomString2,
+      ev.DeviceCustomString4,
+      ev.DeviceCustomString5
+    ].filter(Boolean).join('\n').toLowerCase();
+  }
+
+  function matchesSearch(n, query) {
+    if (!query) return false;
+    const haystack = searchHaystack(n);
+    // Несколько слов через пробел — все должны встретиться.
+    return query.split(/\s+/).filter(Boolean).every(function (part) {
+      return haystack.indexOf(part) !== -1;
+    });
+  }
+
+  /**
+   * Подсвечивает узлы, попавшие под запрос. Остальные узлы не скрываются —
+   * граф остаётся целиком, совпадения просто выделены.
+   */
+  function applySearchHighlight() {
+    const nodes = currentGRoot ? currentGRoot.querySelectorAll('g.node') : [];
+    searchMatches = new Set();
+
+    if (!searchQuery.trim()) {
+      for (const g of nodes) {
+        g.classList.remove('match', 'match-current', 'match-dim');
+      }
+      updateSearchStatus(0);
+      return;
+    }
+
+    const query = searchQuery.trim().toLowerCase();
+    let count = 0;
+
+    for (const g of nodes) {
+      if (g.__real && matchesSearch(g.__real, query)) {
+        g.classList.add('match');
+        g.classList.remove('match-current');
+        searchMatches.add(g);
+        count++;
+      } else {
+        g.classList.remove('match', 'match-current');
+      }
+    }
+
+    if (searchIndex >= count) searchIndex = 0;
+    if (count) markCurrentMatch();
+
+    updateSearchStatus(count);
+  }
+
+  function markCurrentMatch() {
+    const list = Array.from(searchMatches);
+    for (const g of list) g.classList.remove('match-current');
+    const current = list[searchIndex];
+    if (!current) return;
+    current.classList.add('match-current');
+    focusInViewport(current.__data);
+  }
+
+  /** Прокручивает граф так, чтобы совпадение было видно в центре. */
+  function focusInViewport(dn) {
+    if (!overlayEl || !dn || dn._x == null) return;
+    const vp = overlayEl.querySelector('#__siem_tree_viewport__');
+    if (!vp) return;
+    const rect = vp.getBoundingClientRect();
+    view.tx = rect.width / 2 - (dn._x + PAD + NODE_W / 2) * view.scale;
+    view.ty = rect.height / 2 - (dn._y + PAD + NODE_H / 2) * view.scale;
+    applyTransform();
+  }
+
+  function stepSearch(direction) {
+    const total = searchMatches.size;
+    if (!total) return;
+    searchIndex = (searchIndex + direction + total) % total;
+    markCurrentMatch();
+    updateSearchStatus(total);
+  }
+
+  function updateSearchStatus(total) {
+    if (!overlayEl) return;
+    const el = overlayEl.querySelector('#__siem_tree_search_res__');
+    // Приглушаем несовпавшие узлы только пока есть активный запрос.
+    overlayEl.classList.toggle('has-search', Boolean(searchQuery.trim()));
+    if (!el) return;
+    if (!searchQuery.trim()) {
+      el.textContent = '';
+      el.classList.remove('empty');
+      return;
+    }
+    if (!total) {
+      el.textContent = 'нет совпадений';
+      el.classList.add('empty');
+      return;
+    }
+    el.classList.remove('empty');
+    el.textContent = (searchIndex + 1) + ' из ' + total;
   }
 
   /* ==================== 8. Рендер ==================== */
@@ -666,6 +850,8 @@
         + (real && real.phantom ? ' phantom' : '')
         + (real && real.exited ? ' exited' : '')
     });
+    // Данные узла — для поиска и перехода к совпадению.
+    g.__data = dn;
 
     g.appendChild(svgEl('rect', { x: 0, y: 0, width: NODE_W, height: NODE_H, rx: 8, ry: 8 }));
 
@@ -888,6 +1074,33 @@
       #__siem_graph_svg__ g.node circle.exit-dot{
         fill:#f85149;stroke:#0d1117;stroke-width:2;
       }
+
+      /* ---- Подсветка поиска: найденное выделяется, остальное приглушается ---- */
+      #__siem_tree_overlay__.has-search #__siem_graph_svg__ g.node:not(.match) rect{
+        fill:#12161d;stroke:#2d333b;
+      }
+      #__siem_tree_overlay__.has-search #__siem_graph_svg__ g.node:not(.match) text{
+        fill:#5b636e;
+      }
+      #__siem_graph_svg__ g.node.match rect{
+        fill:#2b2410;stroke:#d29922;stroke-width:2.2;
+      }
+      #__siem_graph_svg__ g.node.match text.name{fill:#f0c674}
+      #__siem_graph_svg__ g.node.match-current rect{
+        fill:#3b2f14;stroke:#ffd166;stroke-width:3;filter:drop-shadow(0 0 8px rgba(255,209,102,.55));
+      }
+      #__siem_graph_svg__ g.node.match-current text.name{fill:#ffe1a8}
+
+      #__siem_tree_search__{
+        width:300px;height:28px;padding:0 10px;border-radius:6px;
+        border:1px solid #30363d;background:#0f141a;color:#e6edf3;
+        font:12.5px/1 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+      }
+      #__siem_tree_search__:focus{outline:none;border-color:#388bfd}
+      #__siem_tree_search_res__{
+        color:#8b949e;font-size:11.5px;min-width:84px;white-space:nowrap;
+      }
+      #__siem_tree_search_res__.empty{color:#f0883e}
 
       #__siem_tree_orphans__{
         flex:0 0 auto;max-height:190px;overflow:auto;
