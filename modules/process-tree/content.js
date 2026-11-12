@@ -71,7 +71,13 @@
   let searchIndex = 0;           // выбранное совпадение (переход по Enter)
 
   /* ---------- Применение настроек из runtime-конфига ---------- */
-  function targetAllowed(runtime) {
+  function targetAllowed(runtime, mod) {
+    const matchPath = mod && mod.matchPath
+      ? String(mod.matchPath).replace(/\*+$/, '')
+      : '';
+    const prefix = matchPath && !matchPath.startsWith('/') ? '/' + matchPath : matchPath;
+    if (prefix && !location.pathname.startsWith(prefix)) return false;
+
     const targets = (runtime && runtime.targets) || [];
     const host = String(location.hostname || '').toLowerCase();
 
@@ -87,7 +93,7 @@
   function applyRuntime(runtime) {
     if (!runtime) return;
     const mod = runtime.modules && runtime.modules[MODULE_ID];
-    const allowed = runtime.enabled !== false && mod && mod.enabled && targetAllowed(runtime);
+    const allowed = runtime.enabled !== false && mod && mod.enabled && targetAllowed(runtime, mod);
 
     active = Boolean(allowed);
 

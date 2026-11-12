@@ -6,6 +6,7 @@
   "defaultEnabled": true,
   "runAt": "document_start",
   "allFrames": true,
+  "matchPath": "/threat-hunting",
   "files": {
     "js": ["modules/process-tree/content.js"],
     "css": []

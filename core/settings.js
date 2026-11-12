@@ -229,6 +229,24 @@ export function buildMatchPattern(target, mod) {
   return `${scheme}://${target.host}${path}`;
 }
 
+/**
+ * Проверяет URL с учётом ограничения самого модуля (matchPath).
+ * Используется для до-инжекта в уже открытые вкладки.
+ */
+export function moduleMatchesUrl(target, mod, urlString) {
+  if (!targetMatchesUrl(target, urlString)) return false;
+
+  const raw = mod && mod.matchPath ? String(mod.matchPath).replace(/\*+$/, '') : '';
+  if (!raw) return true;
+  const prefix = raw.startsWith('/') ? raw : '/' + raw;
+
+  try {
+    return new URL(urlString).pathname.startsWith(prefix);
+  } catch {
+    return false;
+  }
+}
+
 export function targetMatchesUrl(target, urlString) {
   if (!target || target.enabled === false) return false;
   try {

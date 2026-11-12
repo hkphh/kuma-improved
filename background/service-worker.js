@@ -15,6 +15,7 @@ import {
   loadRegistry,
   getSettings,
   buildMatchPattern,
+  moduleMatchesUrl,
   targetMatchesUrl
 } from '../core/settings.js';
 
@@ -67,6 +68,7 @@ async function rebuild() {
     runtime.modules[mod.id] = {
       id: mod.id,
       enabled: Boolean(state && state.enabled),
+      matchPath: mod.matchPath || '',
       settings: state ? state.settings : { ...(mod.settings || {}) }
     };
   }
@@ -152,6 +154,7 @@ async function injectIntoOpenTabs(registry, settings) {
       const state = settings.modules[mod.id];
       if (!state || !state.enabled) continue;
       if (!mod.files || !mod.files.js.length) continue;
+      if (!moduleMatchesUrl(target, mod, tab.url)) continue;
 
       try {
         await chrome.scripting.executeScript({
