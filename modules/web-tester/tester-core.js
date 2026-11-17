@@ -7,7 +7,68 @@
 (function () {
   'use strict';
 
+  // ---------- Стандартные поля событий KUMA ----------
+
+  /**
+   * Стандартные поля события KUMA. Пишутся без $ и подставляются из
+   * события; всё остальное (my_var2026 и т.п.) — переменные, которые
+   * задаются в окне песочницы. Список из интерфейса KUMA (e.<Field>).
+   */
+  const KUMA_FIELDS = `
+    AffectedAssets AggregationRuleID AggregationRuleName ApplicationProtocol AttackerHostID
+    AttackerUserID BaseEventCount BaseEvents BytesIn BytesOut Code CorrelationRuleID
+    CorrelationRuleName DestinationAccountID DestinationAddress DestinationAssetID
+    DestinationAssetKSCHostID DestinationAssetKSCInstanceID DestinationCity DestinationCountry
+    DestinationDnsDomain DestinationHostName DestinationLatitude DestinationLongitude
+    DestinationMacAddress DestinationNtDomain DestinationPort DestinationProcessID
+    DestinationProcessName DestinationRegion DestinationServiceName DestinationTranslatedAddress
+    DestinationTranslatedPort DestinationUserID DestinationUserName DestinationUserPrivileges
+    DeviceAction DeviceAddress DeviceAssetID DeviceAssetKSCHostID DeviceAssetKSCInstanceID
+    DeviceCity DeviceCountry DeviceCustomDate1 DeviceCustomDate1Label DeviceCustomDate2
+    DeviceCustomDate2Label DeviceCustomFloatingPoint1 DeviceCustomFloatingPoint1Label
+    DeviceCustomFloatingPoint2 DeviceCustomFloatingPoint2Label DeviceCustomFloatingPoint3
+    DeviceCustomFloatingPoint3Label DeviceCustomFloatingPoint4 DeviceCustomFloatingPoint4Label
+    DeviceCustomIPv6Address1 DeviceCustomIPv6Address1Label DeviceCustomIPv6Address2
+    DeviceCustomIPv6Address2Label DeviceCustomIPv6Address3 DeviceCustomIPv6Address3Label
+    DeviceCustomIPv6Address4 DeviceCustomIPv6Address4Label DeviceCustomNumber1
+    DeviceCustomNumber1Label DeviceCustomNumber2 DeviceCustomNumber2Label DeviceCustomNumber3
+    DeviceCustomNumber3Label DeviceCustomString1 DeviceCustomString1Label DeviceCustomString2
+    DeviceCustomString2Label DeviceCustomString3 DeviceCustomString3Label DeviceCustomString4
+    DeviceCustomString4Label DeviceCustomString5 DeviceCustomString5Label DeviceCustomString6
+    DeviceCustomString6Label DeviceDirection DeviceDnsDomain DeviceEventCategory
+    DeviceEventClassID DeviceExternalID DeviceFacility DeviceHostName DeviceInboundInterface
+    DeviceLatitude DeviceLongitude DeviceMacAddress DeviceNtDomain DeviceOutboundInterface
+    DevicePayloadID DeviceProcessID DeviceProcessName DeviceProduct DeviceReceiptTime
+    DeviceRegion DeviceTimeZone DeviceTranslatedAddress DeviceVendor DeviceVersion EndTime
+    EventOutcome ExternalID Extra F FA FileCreateTime FileHash FileID FileModificationTime
+    FileName FilePath FilePermission FileSize FileType FlexDate1 FlexDate1Label FlexNumber1
+    FlexNumber1Label FlexNumber2 FlexNumber2Label FlexString1 FlexString1Label FlexString2
+    FlexString2Label GroupedBy ID Message N NA Name OldFileCreateTime OldFileHash OldFileID
+    OldFileModificationTime OldFileName OldFilePath OldFilePermission OldFileSize OldFileType
+    Priority Raw Reason ReplayID RequestClientApplication RequestContext RequestCookies
+    RequestMethod RequestUrl S SA ServiceID ServiceName Severity SourceAccountID SourceAddress
+    SourceAssetID SourceAssetKSCHostID SourceAssetKSCInstanceID SourceCity SourceCountry
+    SourceDnsDomain SourceHostName SourceLatitude SourceLongitude SourceMacAddress
+    SourceNtDomain SourcePort SourceProcessID SourceProcessName SourceRegion SourceServiceName
+    SourceTranslatedAddress SourceTranslatedPort SourceUserID SourceUserName
+    SourceUserPrivileges SpaceID StartTime TI Tactic Technique TenantID Timestamp
+    TransportProtocol Type VictimHostID VictimUserID`
+  .trim().split(/\s+/);
+
+  const KUMA_FIELD_SET = new Set(KUMA_FIELDS);
+
+  /** Стандартное ли это поле KUMA (без учёта регистра). */
+  function isKumaField(name) {
+    if (KUMA_FIELD_SET.has(name)) return true;
+    const lower = String(name).toLowerCase();
+    return KUMA_FIELDS.some(f => f.toLowerCase() === lower);
+  }
+
   // ---------- Парсер выражений ----------
+  // ---------- Парсер выражений ----------
+
+const IDENT_RE = /^[A-Za-z_$][A-Za-z0-9_$.]*/;
+const NUM_RE = /^\d+(?:\.\d+)?/;
 
 class Parser {
   constructor(input, variables) {
@@ -16,13 +77,95 @@ class Parser {
     this.variables = variables;
   }
 
+  /**
+   * Лексер. Если найдена незакрытая кавычка (разделитель SQL, обратная
+   * кавычка или обычная одинарная кавычка без закрывающей), символ
+   * считается частью идентификатора — так же его воспринимает KUMA.
+   *   '.*            -> идентификатор '.*      (квотированный разделитель)
+   *   `foo`          -> идентификатор `foo`
+   *   'abc' / "abc"  -> строковый литерал
+   */
   tokenize(str) {
     const tokens = [];
-    const re = /\s*(=>|>=|<=|!=|==|[()+\-*/%,.]|'[^']*'|"[^"]*"|[A-Za-z_$][A-Za-z0-9_$.]*|\d+(?:\.\d+)?|\S)/g;
-    let m;
-    while ((m = re.exec(str)) !== null) {
-      if (m[1]) tokens.push(m[1]);
+    let i = 0;
+
+    const readQuoted = (quote, isTerminator) => {
+      let j = i + 1;
+      while (j < str.length && !isTerminator(str[j], quote)) j++;
+      return j < str.length ? str.slice(i, j + 1) : null;
+    };
+
+    while (i < str.length) {
+      const ch = str[i];
+
+      if (/\s/.test(ch)) { i++; continue; }
+
+      // Строковый литерал в одинарных кавычках. Если кавычка не закрыта —
+      // это разделитель, а не строка.
+      if (ch === "'") {
+        const raw = readQuoted(ch, (c) => c === "'");
+        if (raw !== null) { tokens.push(raw); i += raw.length; continue; }
+      }
+
+      // Строковый литерал в двойных кавычках (незакрытая тоже = литерал).
+      if (ch === '"') {
+        const raw = readQuoted(ch, (c) => c === '"') || str.slice(i);
+        tokens.push(raw);
+        i += raw.length;
+        continue;
+      }
+
+      // Квотированный идентификатор в обратных кавычках.
+      if (ch === '`') {
+        const raw = readQuoted(ch, (c) => c === '`');
+        if (raw !== null) { tokens.push(raw); i += raw.length; continue; }
+        tokens.push(str.slice(i));
+        break;
+      }
+
+      const three = str.slice(i, i + 3).toUpperCase();
+      if (three === 'AND' || (three === 'OR' && /[\s(]/.test(str[i + 3] || ' '))) {
+        const prev = i === 0 ? '' : str[i - 1];
+        const after = str[i + 3] || '';
+        if (!/[A-Za-z0-9_$.]/.test(prev) && !/[A-Za-z0-9_$.]/.test(after)) {
+          tokens.push(three);
+          i += 3;
+          continue;
+        }
+      }
+
+      const two = str.slice(i, i + 2);
+      if (['>=', '<=', '!=', '==', '<>', '=~'].includes(two)) {
+        tokens.push(two);
+        i += 2;
+        continue;
+      }
+
+      if ('()+-*/%,'.includes(ch)) {
+        tokens.push(ch);
+        i++;
+        continue;
+      }
+
+      if ('=<>!'.includes(ch)) {
+        tokens.push(ch);
+        i++;
+        continue;
+      }
+
+      const num = NUM_RE.exec(str.slice(i));
+      if (num) {
+        tokens.push(num[0]);
+        i += num[0].length;
+        continue;
+      }
+
+      const ident = IDENT_RE.exec(str.slice(i));
+      tokens.push(ident[0]);
+      i += ident[0].length;
+      continue;
     }
+
     return tokens;
   }
 
@@ -61,6 +204,42 @@ class Parser {
     return left;
   }
 
+  /**
+   * Дочитывает «голое» условие внутри вызова функции до следующей запятой
+   * или закрывающей скобки и превращает его в строковый литерал.
+   * Пример: $my_var2026 LIKE '.*'  ->  "$my_var2026 LIKE '.*'"
+   */
+  /**
+   * Если после аргумента осталось «голое» условие (`$a LIKE '.*'`), дочитывает
+   * его и объединяет с уже разобранным первым операндом.
+   */
+  maybeBareCondition(previous) {
+    if (this.peek() === undefined || this.peek() === ')' || this.peek() === ',') return previous;
+    return this.parseBareCondition(previous);
+  }
+
+  parseBareCondition(previous) {
+    const parts = [];
+    if (previous && previous.type === 'var') parts.push('$' + previous.name);
+    else if (previous && previous.type === 'string') parts.push(previous.value);
+    else if (previous && previous.type === 'number') parts.push(String(previous.value));
+    else if (previous && previous.type === 'bool') parts.push(previous.value ? 'true' : 'false');
+    else if (previous && previous.type === 'binary') parts.push(renderNode(previous));
+    else if (previous && previous.type === 'call') parts.push(renderNode(previous));
+    let depth = 0;
+    while (this.pos < this.tokens.length) {
+      const token = this.peek();
+      if (token === '(') depth++;
+      if (token === ')') {
+        if (depth === 0) break;
+        depth--;
+      }
+      if (token === ',' && depth === 0) break;
+      parts.push(this.next());
+    }
+    return { type: 'string', value: parts.join(' ') };
+  }
+
   parseFactor() {
     const tok = this.peek();
 
@@ -72,29 +251,50 @@ class Parser {
       return { type: 'number', value: parseFloat(tok) };
     }
 
-    // Строка в кавычках
-    if (tok.startsWith("'") || tok.startsWith('"')) {
+    // Строка в кавычках (обычные или квотированный идентификатор)
+    if (tok.startsWith("'") || tok.startsWith('"') || tok.startsWith('`')) {
       this.next();
-      return { type: 'string', value: tok.slice(1, -1) };
+      const closed = tok.length > 1 && tok.endsWith(tok[0]);
+      return { type: 'string', value: closed ? tok.slice(1, -1) : tok.slice(1) };
     }
 
-    // Функция или переменная
-    if (/^[A-Za-z_$]/.test(tok)) {
+    // Вызов функции: имя без $ (а также без кавычек).
+    if (/^[A-Za-z_]/.test(tok) && !/^(AND|OR)$/.test(tok) && this.tokens[this.pos + 1] === '(') {
       const name = this.next();
-      if (this.peek() === '(') {
-        this.next();
-        const args = [];
-        if (this.peek() !== ')') {
-          args.push(this.parseExpression());
-          while (this.peek() === ',') {
-            this.next();
-            args.push(this.parseExpression());
-          }
+      this.next(); // '('
+      const args = [];
+      while (this.peek() !== ')' && this.peek() !== undefined) {
+        args.push(this.maybeBareCondition(this.parseExpression()));
+        if (this.peek() === ',') {
+          this.next();
+          continue;
         }
-        this.expect(')');
-        return { type: 'call', name, args };
+        break;
       }
-      return { type: 'var', name };
+      this.expect(')');
+      return { type: 'call', name, args };
+    }
+
+    // Переменная с явным $: $my_var.
+    if (/^\$[A-Za-z0-9_]/.test(tok)) {
+      return { type: 'var', name: this.next().slice(1) };
+    }
+
+    if (tok === 'true') { this.next(); return { type: 'bool', value: true }; }
+    if (tok === 'false') { this.next(); return { type: 'bool', value: false }; }
+
+    // Переменная: $my_var или стандартное поле KUMA (SourceUserName и т.п.).
+    // Значение берётся из окна песочницы; если его нет, а имя — стандартное
+    // поле, оно считается полем события (см. evaluate).
+    if (/^[A-Za-z_]/.test(tok)) {
+      const name = this.next();
+      const vars = this.variables || {};
+      const isKnown = Object.prototype.hasOwnProperty.call(vars, name);
+      if (isKnown || isKumaField(name)) {
+        return { type: 'var', name };
+      }
+      // Имя не определено и это не поле KUMA — обычная строка.
+      return { type: 'string', value: name };
     }
 
     // Скобки
@@ -109,15 +309,30 @@ class Parser {
   }
 }
 
+function renderNode(node) {
+  switch (node.type) {
+    case 'number': return String(node.value);
+    case 'bool': return node.value ? 'true' : 'false';
+    case 'string': return /^[A-Za-z_]\w*$/.test(node.value) ? node.value : "'" + node.value + "'";
+    case 'var': return '$' + node.name;
+    case 'binary': return renderNode(node.left) + ' ' + node.op + ' ' + renderNode(node.right);
+    case 'call': return node.name + '(' + node.args.map(renderNode).join(', ') + ')';
+  }
+  return '';
+}
+
 // ---------- Вычисление ----------
 
 function evaluate(node, vars) {
   switch (node.type) {
     case 'number': return node.value;
     case 'string': return node.value;
+    case 'bool': return node.value;
     case 'var': {
       const name = node.name;
       if (name in vars) return vars[name];
+      // Стандартное поле KUMA без заданного значения — поле события.
+      if (isKumaField(name)) return '';
       throw new Error(`Переменная "${name}" не задана`);
     }
     case 'binary': {
@@ -193,7 +408,8 @@ function callFunction(name, argNodes, vars) {
       return String(args[0]).split(String(args[1])).join(String(args[2]));
 
     case 'regexp_replace': {
-      const re = new RegExp(String(args[1]), 'g');
+      const flag = args[3] === true || args[3] === 'all' ? 'g' : '';
+      const re = new RegExp(String(args[1]), flag);
       return String(args[0]).replace(re, String(args[2]));
     }
 
@@ -276,25 +492,8 @@ function callFunction(name, argNodes, vars) {
       return Math.pow(Number(args[0]), Number(args[1]));
 
     // ----- Условные -----
-    case 'conditional': {
-      const cond = String(args[0]);
-      const trueVal = args[1];
-      const falseVal = args[2];
-
-      let result = false;
-
-      if (/\s+AND\s+/i.test(cond)) {
-        const parts = cond.split(/\s+AND\s+/i);
-        result = parts.every(p => evalSimpleCondition(p, vars));
-      } else if (/\s+OR\s+/i.test(cond)) {
-        const parts = cond.split(/\s+OR\s+/i);
-        result = parts.some(p => evalSimpleCondition(p, vars));
-      } else {
-        result = evalSimpleCondition(cond, vars);
-      }
-
-      return result ? trueVal : falseVal;
-    }
+    case 'conditional':
+      return evalCondition(String(args[0]), vars) ? args[1] : args[2];
 
     // ----- Время (упрощённо) -----
     case 'now':
@@ -350,35 +549,141 @@ function callFunction(name, argNodes, vars) {
   }
 }
 
-function evalSimpleCondition(cond, vars) {
-  const m = cond.match(/^\s*(\S+)\s*(=|!=|LIKE|ILIKE)\s*(.+?)\s*$/i);
-  if (!m) return false;
+// ---------- Условные выражения (SQL-подобный синтаксис KUMA) ----------
 
-  const field = m[1].trim();
-  const op = m[2].toUpperCase();
-  const val = m[3].trim().replace(/^['"]|['"]$/g, '');
+const COND_RE = /^\s*((?:'[^']*'|`[^`]*`|"[^"]*"|[^\s'])+?)\s*(NOT\s+ILIKE|NOT\s+LIKE|ILIKE|LIKE|<>|!=|=|>=|<=|>|<)\s*(.+?)\s*$/is;
 
-  const fieldVal = vars[field] !== undefined ? String(vars[field]) : field;
+/**
+ * Разбирает условие вида `$var LIKE '-.*' [AND|OR ...]`.
+ * Поддерживает префикс $ у переменных, квотированные разделители
+ * ('-.*', '.*', `foo`) и сами значения в кавычках.
+ */
+function evalCondition(cond, vars) {
+  const orParts = splitCondition(cond, 'OR');
+  if (orParts.length > 1) return orParts.some(p => evalAndGroup(p, vars));
+  return evalAndGroup(cond, vars);
+}
+
+function evalAndGroup(cond, vars) {
+  const parts = splitCondition(cond, 'AND');
+  return parts.every(p => evalSimpleCondition(p, vars));
+}
+
+function splitCondition(cond, keyword) {
+  const re = new RegExp(`\\s+${keyword}\\s+`, 'i');
+  return cond.split(re).filter(p => p.trim() !== '');
+}
+
+/**
+ * Необязательный третий аргумент — регулярное выражение, которым
+ * проверяется значение переменной. Полезно для «конструкции» вроде
+ * `regexp:'.$event.UserName.IsNotWhitespace()` — ограничения KUMA,
+ * которые невозможно выполнить без события, игнорируются.
+ */
+function evalSimpleCondition(cond, vars, extraRegexp) {
+  let rest = String(cond).trim();
+  let pattern = extraRegexp ? String(extraRegexp) : null;
+
+  const m = rest.match(COND_RE);
+  if (!m) {
+    if (pattern) return compileSafeRe(pattern).test(stripVar(rest));
+    return false;
+  }
+
+  const field = unquote(m[1].trim());
+  const op = m[2].replace(/\s+/g, ' ').toUpperCase();
+  let val = m[3].trim();
+
+  // В кавычках может быть как значение, так и регулярное выражение.
+  const quoted = val.match(/^(['"`])(.*)\1$/s) || val.match(/^(['"`])(.*)$/s);
+  if (quoted) val = quoted[2];
+
+  const isPattern = op === 'LIKE' || op === 'ILIKE' || op === '=~';
+  if (!pattern && isPattern) pattern = val;
+
+  // Если переменной нет в окне песочницы, сравниваем с регулярным
+  // литералом (например, `regexp:'.$event.X.IsNotWhitespace()`).
+  const fieldVal = field in vars ? String(vars[field]) : stripVar(field);
 
   switch (op) {
-    case '=': return fieldVal === val;
-    case '!=': return fieldVal !== val;
-    case 'LIKE': {
-      const re = new RegExp('^' + val.replace(/%/g, '.*').replace(/_/g, '.') + '$');
-      return re.test(fieldVal);
-    }
-    case 'ILIKE': {
-      const re = new RegExp('^' + val.replace(/%/g, '.*').replace(/_/g, '.') + '$', 'i');
-      return re.test(fieldVal);
+    case '=':
+      if (field in vars) return fieldVal === val;
+      return compileSafeRe(escapeRegex(val)).test(fieldVal);
+    case '!=':
+    case '<>':
+      if (field in vars) return fieldVal !== val;
+      return !compileSafeRe(escapeRegex(val)).test(fieldVal);
+    case '=~':
+    case 'LIKE':
+      return compileSafeRe(pattern).test(fieldVal);
+    case 'ILIKE':
+      return compileSafeRe(pattern, 'i').test(fieldVal);
+    case 'NOT LIKE':
+      return !compileSafeRe(pattern).test(fieldVal);
+    case 'NOT ILIKE':
+      return !compileSafeRe(pattern, 'i').test(fieldVal);
+    case '>':
+    case '>=':
+    case '<':
+    case '<=': {
+      const a = parseFloat(fieldVal);
+      const b = parseFloat(val);
+      if (Number.isNaN(a) || Number.isNaN(b)) {
+        const cmp = fieldVal < val ? -1 : fieldVal > val ? 1 : 0;
+        if (op === '>') return cmp > 0;
+        if (op === '>=') return cmp >= 0;
+        if (op === '<') return cmp < 0;
+        return cmp <= 0;
+      }
+      if (op === '>') return a > b;
+      if (op === '>=') return a >= b;
+      if (op === '<') return a < b;
+      return a <= b;
     }
   }
   return false;
+}
+
+/**
+ * KUMA-ограничение, которое не задано в окне песочницы (например,
+ * `$event.UserName.IsNotWhitespace()`), — вырезаем префиксы и суффиксы,
+ * оставляя имя переменной. Если значение неизвестно, паттерн применится
+ * к самому имени — это честный ответ «условие не подтверждено».
+ */
+function stripVar(name) {
+  return String(name).trim().replace(/^\$/, '').replace(/\.[A-Za-z_]\w*\(\)$/, '');
+}
+
+function unquote(s) {
+  return String(s).trim().replace(/^\$/, '').replace(/^(['"`])(.*)\1$/s, '$2');
+}
+
+function escapeRegex(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function compileSafeRe(pattern, flags) {
+  const src = String(pattern);
+  const tryList = [
+    src,
+    // SQL-классы эквивалентности и «любые символы кроме перевода строки».
+    src.replace(/\[:alnum:\]/g, 'A-Za-z0-9').replace(/\[:alpha:\]/g, 'A-Za-z')
+       .replace(/\[:digit:\]/g, '0-9').replace(/\[:space:\]/g, '\\s'),
+    escapeRegex(src)
+  ];
+  for (const candidate of tryList) {
+    try {
+      return new RegExp('^' + candidate + '$', flags || '');
+    } catch (e) { /* следующий вариант */ }
+  }
+  return /(?!)/;
 }
 
   globalThis.__KUMA_WEB_TESTER__ = {
     Parser,
     evaluate,
     callFunction,
+    evalCondition,
     evalSimpleCondition
   };
 })();

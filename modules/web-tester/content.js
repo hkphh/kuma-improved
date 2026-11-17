@@ -18,12 +18,10 @@
 
   const MODULE_ID = 'web-tester';
   const HOST_ID = '__kuma_web_tester_host__';
-  const STATE_KEY = 'module.web-tester.state';
 
   const DEFAULT_SETTINGS = {
     routePattern: '#/resources/correlationRule/[0-9a-fA-F-]{16,}',
-    buttonText: 'Function sandbox',
-    persistState: true
+    buttonText: 'Function sandbox'
   };
 
   let settings = { ...DEFAULT_SETTINGS };
@@ -31,7 +29,6 @@
   let buttonEl = null;
   let observer = null;
   let syncTimer = null;
-  let saveTimer = null;
   let panelHost = null;
   let panelShadow = null;
 
@@ -270,6 +267,11 @@
   function sync() {
     if (!active) return;
 
+    // Исправление последствий прошлых версий: удаляем осиротевшие кнопки.
+    document.querySelectorAll('[data-kuma-web-tester="button"]').forEach(function (stale) {
+      if (stale !== buttonEl) stale.remove();
+    });
+
     if (!routeMatches()) {
       removeButton();
       closePanel();
@@ -282,7 +284,9 @@
       return;
     }
 
-    if (buttonEl && buttonEl.isConnected && buttonEl.parentElement === toolbar) return;
+    // Кнопка при открытии панели переносится в свой узел — тогда не
+    // считаем её пропавшей.
+    if (buttonEl && buttonEl.isConnected) return;
 
     removeButton();
     buttonEl = createButton(toolbar);
@@ -410,6 +414,7 @@
       padding: 5px 8px;
     }
     .wt-mini:hover { background: #eaeef2; }
+    .wt-vars-buttons { display: flex; gap: 6px; }
     .wt-var-del {
       height: 27px;
       padding: 0;
@@ -419,6 +424,28 @@
       font-size: 15px;
     }
     .wt-var-del:hover { background: #ffe0dd; }
+    .wt-opt {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 2px;
+      color: #57606a;
+      font: 11.5px/1.3 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      cursor: pointer;
+      user-select: none;
+    }
+    .wt-opt input { margin: 0; }
+    .wt-details {
+      margin-top: 4px;
+      color: #57606a;
+      font: 11.5px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+    .wt-details summary { cursor: pointer; color: #0969da; }
+    .wt-details ul { margin: 4px 0 0; padding-left: 18px; }
+    .wt-details code {
+      font: 11.5px/1.4 Consolas, "SFMono-Regular", Menlo, monospace;
+      color: #1f2328;
+    }
     .wt-actions {
       display: flex;
       align-items: center;
@@ -469,11 +496,18 @@
         </div>
         <div class="wt-body">
           <label class="wt-label">Выражение</label>
-          <textarea class="wt-expr" rows="3" spellcheck="false" placeholder="len(DeviceCustomString1)"></textarea>
+          <textarea class="wt-expr" rows="3" spellcheck="false" placeholder="substring(SourceUserName, last_index_of('@', SourceUserName) + 1)"></textarea>
+          <label class="wt-opt" title="Переменные в рабочей области KUMA могут содержать выражения (например, substring(...)). Если снять галочку, значение переменной всегда считается строкой.">
+            <input type="checkbox" class="wt-var-expr" checked>
+            Считать значения переменных выражениями
+          </label>
 
           <div class="wt-vars-head">
             <span>Значения переменных</span>
-            <button type="button" class="wt-mini wt-add">+ переменная</button>
+            <span class="wt-vars-buttons">
+              <button type="button" class="wt-mini wt-import" title="Скопировать переменные из панели правила KUMA в песочницу">Перенести переменные</button>
+              <button type="button" class="wt-mini wt-add">+ переменная</button>
+            </span>
           </div>
           <div class="wt-vars"></div>
 
@@ -483,9 +517,214 @@
           </div>
 
           <div class="wt-result empty">Результат появится здесь</div>
+          <details class="wt-details">
+            <summary>Как вычислены переменные</summary>
+            <ul></ul>
+          </details>
         </div>
       </div>
     `;
+  }
+
+  /* ==================== Перенос переменных из KUMA ==================== */
+
+  /**
+   * Читает переменные текущего правила из панели KUMA.
+   * Структура панели может отличаться между версиями KUMA, поэтому
+   * пробуем несколько устойчивых признаков, а в конце — эвристику по
+   * тексту строки «Имя  Значение».
+   */
+  function readKumaVariables() {
+    const panels = Array.from(document.querySelectorAll('[id$="-panel-variables"], [id*="panel-variables"]'));
+
+    // Активную панель выбираем по видимости, но строки читаем без фильтра:
+    // KUMA может держать неактивную вкладку в DOM, а строки в таблице
+    // виртуального скролла могут быть отрисованы вне видимой области.
+    const ordered = panels.filter(isVisible).concat(panels.filter(function (p) { return !isVisible(p); }));
+
+    for (const panel of ordered) {
+      const rows = panel.querySelectorAll(
+        '[data-testid="variable-row"], [data-testid^="variable-row"], .ant-table-tbody > tr, tbody > tr'
+      );
+      const found = collectFromRows(rows);
+      if (found.length) return found;
+
+      const inputs = panel.querySelectorAll('input');
+      if (inputs.length) {
+        const fromInputs = collectFromInputs(inputs);
+        if (fromInputs.length) return fromInputs;
+      }
+
+      const fromText = collectFromText(panel);
+      if (fromText.length) return fromText;
+    }
+
+    return [];
+  }
+
+  function collectFromRows(rows) {
+    const result = [];
+    rows.forEach(function (row) {
+      // Строки-измерители antd и строки без содержимого пропускаем.
+      if (row.classList.contains('ant-table-measure-row')) return;
+
+      const pair = pickPair(rowTexts(row));
+      if (pair) result.push(pair);
+    });
+    return result;
+  }
+
+  /** Текст строки, разбитый по дочерним элементам (span/div/input). */
+  function rowTexts(row) {
+    const named = Array.from(row.querySelectorAll('td[data-testid]'))
+      .filter(function (cell) { return isFieldCell(cell.getAttribute('data-testid')); });
+    if (named.length) return named.map(cellText);
+
+    // Таблица без data-testid (другие версии KUMA): обычные ячейки, кроме
+    // служебной колонки с чекбоксом.
+    const cells = Array.from(row.querySelectorAll('td, [role="cell"]'))
+      .filter(function (cell) { return !cell.querySelector('.ant-checkbox-wrapper') || cell.querySelector('[kuma-data]'); });
+    if (cells.length) {
+      const texts = cells.map(cellText).filter(function (t) { return t !== ''; });
+      if (texts.length) return texts;
+    }
+
+    const parts = [];
+    row.querySelectorAll('input').forEach(function (input) {
+      const value = String(input.value || '').trim();
+      if (value) parts.push(value);
+    });
+    if (parts.length) return parts;
+
+    const leaves = Array.from(row.querySelectorAll('span, div, label'))
+      .filter(function (el) { return !el.querySelector('span, div, label'); })
+      .map(function (el) { return String(el.textContent || '').trim(); })
+      .filter(Boolean);
+    if (leaves.length) return leaves;
+
+    return [cellText(row)];
+  }
+
+  /** Ячейка поля данные, а не служебная (выбор, сортировка и т.п.). */
+  function isFieldCell(testid) {
+    return testid !== 'selection' && testid !== 'selection-column';
+  }
+
+  /**
+   * Текст ячейки. Значения в KUMA набраны в CodeMirror: в отрисованном DOM
+   * пробелы заменены на `<span class="cm-specialChar">•</span>`, поэтому
+   * textContent врёт. Настоящий текст лежит в атрибуте kuma-data
+   * (на .cm-theme-light и на input), его и берём.
+   */
+  function cellText(cell) {
+    const editor = cell.querySelector('[kuma-data]');
+    if (editor) {
+      const raw = editor.getAttribute('kuma-data');
+      if (raw != null && raw !== '') return normalizeKumaText(raw);
+    }
+
+    const input = cell.querySelector('input, textarea');
+    if (input && typeof input.value === 'string' && input.value !== '') {
+      return normalizeKumaText(input.value);
+    }
+
+    const cm = cell.querySelector('.cm-content');
+    const raw = String((cm || cell).textContent || '');
+    return normalizeKumaText(raw.replace(/•/g, ' '));
+  }
+
+  function collectFromInputs(inputs) {
+    const values = Array.from(inputs)
+      .map(function (input) { return String(input.value || '').trim(); })
+      .filter(Boolean);
+
+    const result = [];
+    for (let i = 0; i + 1 < values.length; i += 2) {
+      const pair = pickPair([values[i], values[i + 1]]);
+      if (pair) result.push(pair);
+    }
+    return result;
+  }
+
+  function collectFromText(panel) {
+    const result = [];
+    const raw = String(panel.innerHTML || '')
+      .replace(/<(br|\/div|\/label|\/p|\/li)[^>]*>/gi, '\n')
+      .replace(/<[^>]+>/g, ' ');
+    const text = decodeEntities(raw);
+    const lines = String(panel.innerText || text).split('\n');
+    for (const line of lines) {
+      const m = line.trim().match(/^([A-Za-z_][A-Za-z0-9_.-]*)\s*[:=]\s*(.+)$/);
+      if (m) result.push({ name: m[1], value: m[2].trim() });
+    }
+    return result;
+  }
+
+  function decodeEntities(s) {
+    return String(s)
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&amp;/g, '&');
+  }
+
+  /** Из ячеек строки выбирает пару «имя — значение». */
+  function pickPair(texts) {
+    const clean = texts.map(normalizeKumaText).filter(function (t) { return t !== ''; });
+    if (clean.length < 2) return null;
+
+    const nameIdx = clean.findIndex(function (t) {
+      return /^[A-Za-z_][A-Za-z0-9_.-]*$/.test(t);
+    });
+    if (nameIdx === -1) return null;
+
+    const name = clean[nameIdx];
+    const value = clean.slice(nameIdx + 1).join(' ').trim();
+    return { name: name, value: value };
+  }
+
+  /**
+   * KUMA отдаёт в тексте неразрывные и «широкие» пробелы (U+00A0, U+2009,
+   * U+202F и т.п.), которые при копировании превращаются в «•» или
+   * невидимые символы. Приводим их к обычному пробелу.
+   */
+  function normalizeKumaText(value) {
+    return String(value == null ? '' : value)
+      .replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g, ' ')
+      .replace(/[\u200B-\u200D\uFEFF\u2060]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function importVariables(shadow) {
+    const box = shadow.querySelector('.wt-vars');
+    const found = readKumaVariables();
+    if (!found.length) {
+      showResult(shadow, 'В панели KUMA переменные не найдены', true);
+      return;
+    }
+
+    const existing = new Map();
+    shadow.querySelectorAll('.wt-var').forEach(function (row) {
+      const name = row.querySelector('.wt-var-name').value.trim();
+      if (name) existing.set(name, row);
+    });
+
+    let added = 0;
+    let updated = 0;
+    found.forEach(function (item) {
+      const row = existing.get(item.name);
+      if (row) {
+        row.querySelector('.wt-var-value').value = item.value;
+        updated++;
+      } else {
+        box.appendChild(makeVarRow(item.name, item.value));
+        added++;
+      }
+    });
+
+    showResult(shadow, 'Перенесено: ' + found.length + ' (новых ' + added + ', обновлено ' + updated + ')', false);
+    saveState(shadow);
   }
 
   function makeVarRow(name, value) {
@@ -526,6 +765,143 @@
     return vars;
   }
 
+  /**
+   * Парсит значение переменной. `knownVars` — имена, заданные в окне
+   * песочницы: по ним парсер отличает переменную от безымянной строки.
+   */
+  function parseSafely(core, expression, selfName, knownVars) {
+    const table = {};
+    Object.keys(knownVars || {}).forEach(function (name) { table[name] = true; });
+    const parser = new core.Parser(expression, table);
+    if (selfName) parser.variables.self = selfName;
+    return parser.parse();
+  }
+
+  /**
+   * Значение переменной в рабочей области KUMA — это тоже выражение.
+   * Перед «Вычислить» каждое значение парсится само по себе (со ссылками
+   * на другие переменные). Если значение не является выражением, оно
+   * остаётся строкой. Циклы между переменными обрабатываются безопасно.
+   *
+   * @returns {{ vars: Object, notes: Array, lookup: Function }}
+   */
+  function resolveVars(core, rawVars, asExpressions) {
+    const lookups = {};   // имя -> функция значения (лениво, с защитой от циклов)
+    const notes = {};
+
+    function define(name, compute) {
+      lookups[name] = function (stack) {
+        return compute(stack || []);
+      };
+    }
+
+    Object.keys(rawVars).forEach(function (name) {
+      const raw = String(rawVars[name] == null ? '' : rawVars[name]);
+      const text = raw.trim();
+
+      if (!asExpressions) {
+        define(name, function () { return raw; });
+        return;
+      }
+
+      let node = null;
+      try {
+        node = text ? parseSafely(core, text, name, rawVars) : null;
+      } catch (e) {
+        node = null;
+      }
+
+      // Значение — имя стандартного поля KUMA или другой переменной:
+      // подставляем их значение, а не строку с именем.
+      if (node && node.type === 'var') {
+        define(name, function (stack) {
+          try {
+            const value = core.evaluate(node, makeVars(stack.concat(name)));
+            notes[name] = { kind: 'expression', value: value };
+            return value;
+          } catch (e) {
+            notes[name] = { kind: 'string', value: raw };
+            return raw;
+          }
+        });
+        return;
+      }
+
+      // Не выражение? Значение остаётся как есть.
+      if (!node || node.type === 'string') {
+        define(name, function () { return node ? node.value : raw; });
+        notes[name] = {
+          kind: 'string',
+          value: node ? node.value : raw
+        };
+        return;
+      }
+
+      define(name, function (stack) {
+        if (stack.indexOf(name) !== -1) {
+          notes[name] = { kind: 'cycle', value: raw };
+          return raw;
+        }
+        try {
+          const deps = makeVars(stack.concat(name));
+          const value = core.evaluate(node, deps);
+          notes[name] = { kind: 'expression', value: value };
+          return value;
+        } catch (e) {
+          notes[name] = { kind: 'string', value: raw, reason: e.message };
+          return raw;
+        }
+      });
+    });
+
+    /**
+     * Объект переменных для core.evaluate. Каждое обращение к неизвестному
+     * ключу резолвит одноимённую переменную из рабочей области.
+     */
+    function makeVars(stack) {
+      return new Proxy({}, {
+        has: function (target, key) {
+          return typeof key === 'string' && (key === 'self' || lookups[key] || key in target);
+        },
+        // Парсер проверяет own-свойства (hasOwnProperty), чтобы отличить
+        // переменную от строки, — прокси должен отвечать и на это.
+        getOwnPropertyDescriptor: function (target, key) {
+          if (typeof key === 'string' && (key === 'self' || lookups[key])) {
+            return { value: undefined, writable: false, enumerable: true, configurable: true };
+          }
+          if (key in target) return Object.getOwnPropertyDescriptor(target, key);
+          return undefined;
+        },
+        get: function (target, key) {
+          if (key === 'self') return undefined;
+          if (Object.prototype.hasOwnProperty.call(target, key)) return target[key];
+          if (lookups[key]) return lookups[key](stack);
+          const dep = rawVars[key];
+          return dep === undefined ? undefined : String(dep);
+        }
+      });
+    }
+
+    return { vars: makeVars([]), notes: notes };
+  }
+
+  function formatValue(value) {
+    if (Array.isArray(value)) return '[' + value.join(', ') + ']';
+    return String(value);
+  }
+
+  function showNotes(shadow, notes) {
+    const parent = shadow.querySelector('.wt-details ul');
+    if (!parent) return;
+    parent.textContent = '';
+
+    Object.keys(notes).forEach(function (name) {
+      const li = document.createElement('li');
+      li.textContent = name + ' = ' + formatValue(notes[name].value);
+      parent.appendChild(li);
+    });
+  }
+
   function showResult(shadow, text, isError) {
     const box = shadow.querySelector('.wt-result');
     box.classList.remove('empty');
@@ -533,55 +909,48 @@
     box.textContent = text;
   }
 
-  function writeState(shadow) {
+  /**
+   * Состояние живёт только в рамках сессии страницы: при первом открытии
+   * окна оно пустое, а повторное открытие на той же странице показывает
+   * то, что было введено. В chrome.storage ничего не пишем.
+   */
+  let sessionState = null;
+  let sessionDirty = false;
+
+  function snapshot(shadow) {
     const vars = [];
     shadow.querySelectorAll('.wt-var').forEach(function (row) {
       const name = row.querySelector('.wt-var-name').value.trim();
       const value = row.querySelector('.wt-var-value').value;
       if (name) vars.push({ name: name, value: value });
     });
-    const expression = shadow.querySelector('.wt-expr').value;
+    const varExprBox = shadow.querySelector('.wt-var-expr');
     const resultEl = shadow.querySelector('.wt-result');
     const hasResult = resultEl && !resultEl.classList.contains('empty');
-    try {
-      chrome.storage.local.set({
-        [STATE_KEY]: {
-          expression: expression,
-          vars: vars,
-          result: hasResult ? resultEl.textContent : '',
-          resultError: Boolean(resultEl && resultEl.classList.contains('error'))
-        }
-      });
-    } catch (e) {}
+    return {
+      expression: shadow.querySelector('.wt-expr').value,
+      vars: vars,
+      varsAreExpressions: Boolean(varExprBox && varExprBox.checked),
+      result: hasResult ? resultEl.textContent : '',
+      resultError: Boolean(resultEl && resultEl.classList.contains('error'))
+    };
   }
 
-  function saveState(shadow, immediate) {
-    if (!settings.persistState) return;
-    if (saveTimer) {
-      clearTimeout(saveTimer);
-      saveTimer = null;
-    }
-
-    if (immediate) {
-      writeState(shadow);
-      return;
-    }
-
-    saveTimer = setTimeout(function () {
-      saveTimer = null;
-      writeState(shadow);
-    }, 350);
+  /** Запоминает состояние, если пользователь что-то вводил. */
+  function saveState(shadow) {
+    sessionState = snapshot(shadow);
   }
 
-  async function loadState() {
-    if (!settings.persistState) return null;
-    try {
-      const data = await chrome.storage.local.get(STATE_KEY);
-      return data[STATE_KEY] || null;
-    } catch (e) {
-      return null;
-    }
+  function markDirty(shadow) {
+    sessionDirty = true;
+    saveState(shadow);
   }
+
+  function loadState() {
+    // Неполный ввод (пустое окно) не должен возвращаться при переоткрытии.
+    return sessionDirty ? sessionState : null;
+  }
+
 
   function evaluateExpression(shadow) {
     const core = globalThis.__KUMA_WEB_TESTER__;
@@ -596,14 +965,22 @@
       return;
     }
 
+    const rawVars = collectVars(shadow);
+    const varExprBox = shadow.querySelector('.wt-var-expr');
+
     try {
-      const vars = collectVars(shadow);
-      const parser = new core.Parser(expression, vars);
+      const resolved = resolveVars(core, rawVars, Boolean(varExprBox && varExprBox.checked));
+
+      const parser = new core.Parser(expression, resolved.vars);
       const ast = parser.parse();
-      const result = core.evaluate(ast, vars);
+      const result = core.evaluate(ast, resolved.vars);
       const text = Array.isArray(result) ? JSON.stringify(result) : String(result);
+      // Значения переменных вычисляются лениво — заметки собираем после
+      // вычисления выражения.
+      showNotes(shadow, resolved.notes);
       showResult(shadow, text, false);
     } catch (error) {
+      showNotes(shadow, {});
       showResult(shadow, 'Ошибка: ' + error.message, true);
     }
 
@@ -649,19 +1026,14 @@
     positionPanel(windowEl);
 
     /* --- состояние --- */
-    const state = await loadState();
-    if (!panelHost) return;
+    const state = loadState();
 
-    if (state && typeof state.expression === 'string') {
-      expr.value = state.expression;
-    } else {
-      expr.value = 'len(DeviceCustomString1)';
-    }
+    expr.value = state && typeof state.expression === 'string' ? state.expression : '';
 
-    const vars = state && Array.isArray(state.vars) && state.vars.length
-      ? state.vars
-      : [{ name: 'DeviceCustomString1', value: 'Hello World' }];
+    const varExprBox = panelShadow.querySelector('.wt-var-expr');
+    varExprBox.checked = state ? state.varsAreExpressions !== false : true;
 
+    const vars = state && Array.isArray(state.vars) ? state.vars : [];
     for (const item of vars) {
       varsBox.appendChild(makeVarRow(item.name, item.value));
     }
@@ -681,7 +1053,12 @@
       const row = makeVarRow('', '');
       varsBox.appendChild(row);
       row.querySelector('.wt-var-name').focus();
-      saveState(panelShadow);
+      markDirty(panelShadow);
+    });
+
+    panelShadow.querySelector('.wt-import').addEventListener('click', function () {
+      importVariables(panelShadow);
+      sessionDirty = true;
     });
 
     panelShadow.querySelector('.wt-eval').addEventListener('click', function () {
@@ -693,11 +1070,12 @@
       if (!del) return;
       const row = del.closest('.wt-var');
       if (row) row.remove();
-      saveState(panelShadow);
+      markDirty(panelShadow);
     });
 
-    varsBox.addEventListener('input', function () { saveState(panelShadow); });
-    expr.addEventListener('input', function () { saveState(panelShadow); });
+    varsBox.addEventListener('input', function () { markDirty(panelShadow); });
+    expr.addEventListener('input', function () { markDirty(panelShadow); });
+    varExprBox.addEventListener('change', function () { markDirty(panelShadow); });
 
     panelShadow.addEventListener('keydown', function (event) {
       if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
@@ -732,11 +1110,7 @@
   }
 
   function closePanel() {
-    if (panelShadow) saveState(panelShadow, true);
-    if (saveTimer) {
-      clearTimeout(saveTimer);
-      saveTimer = null;
-    }
+    if (panelShadow && sessionDirty) saveState(panelShadow);
     if (panelHost) {
       panelHost.remove();
       panelHost = null;
