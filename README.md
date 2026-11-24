@@ -240,6 +240,14 @@ data: {"kind":"alert","payload":{"id":"…","name":"…"}}
 * **Размер шрифта, px**;
 * **Горизонтальный / вертикальный отступ ячейки, px**.
 
+### Было
+
+<img width="1377" height="879" alt="Снимок экрана — 2026-11-24 в 11 17 40" src="https://github.com/user-attachments/assets/bdc04ca5-e8fe-4696-b90e-e8b240a42eea" />
+
+### Стало
+
+<img width="1377" height="879" alt="Снимок экрана — 2026-11-24 в 11 17 57" src="https://github.com/user-attachments/assets/9240bbdd-510c-4572-90af-db035f62986b" />
+
 ---
 
 # Модуль «Process Tree»
