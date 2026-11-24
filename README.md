@@ -35,6 +35,41 @@
 со следующего запроса; для полного перехвата с момента загрузки страницу лучше
 перезагрузить.
 
+### Сборка
+
+Исходники в корне — это рабочий распакованный Chromium-extension. Для
+Firefox расширение собирается в отдельную папку: её нельзя загрузить вместо
+корня, потому что фон в Firefox MV3 не поддерживает ES-модули.
+
+```sh
+node scripts/build.js            # обе сборки
+node scripts/build.js --firefox  # только Firefox
+```
+
+Получается:
+
+```
+dist/chromium/                            распакованная сборка Chromium
+dist/firefox/                             распакованная сборка Firefox
+dist/kuma-improved-<версия>-chromium.zip
+dist/kuma-improved-<версия>-firefox.zip
+```
+
+Для Firefox сборка загружается так: `about:debugging` → «Этот Firefox» →
+«Загрузить временное дополнение» → `dist/firefox/manifest.json`. Версии
+Firefox ESR — от 115, постоянная установка подписанного `.xpi` — только через
+AMO (или `xpinstall.signatures.required=false` в ночных сборках).
+
+Что меняется для Firefox при сборке:
+
+* `background.scripts` вместо `service_worker` — фон, `options` и `popup`
+  собираются в самодостаточные файлы (`scripts/build.js`, подстановка
+  `core/settings.js` вместо `import`);
+* в шаблонах динамической регистрации снимается завершающая `*` — Firefox
+  не принимает `*` в конце пути match pattern;
+* в `web_accessible_resources` добавляется то, что модули объявили в
+  `files.webAccessible` (страницы KUMA вставляют `inject.js` и звук сами).
+
 ---
 
 ## Как это устроено
@@ -68,6 +103,8 @@ modules/
   ui-improve/
     module.json
     content.js                 плотные таблица событий и панель события
+scripts/
+  build.js                     сборка Chromium/Firefox в dist/
 docs/
   ADDING_MODULES.md
 ```

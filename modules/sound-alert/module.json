@@ -8,7 +8,8 @@
   "allFrames": false,
   "files": {
     "js": ["modules/sound-alert/content.js"],
-    "css": []
+    "css": [],
+    "webAccessible": ["modules/sound-alert/inject.js", "modules/sound-alert/alert.mp3"]
   },
   "settings": {
     "feedPath": "/api/private/notifications/feed",

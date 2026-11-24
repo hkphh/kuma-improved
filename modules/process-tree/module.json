@@ -8,8 +8,13 @@
   "allFrames": true,
   "matchPath": "/threat-hunting",
   "files": {
-    "js": ["modules/process-tree/content.js"],
-    "css": []
+    "js": [
+      "modules/process-tree/content.js"
+    ],
+    "css": [],
+    "webAccessible": [
+      "modules/process-tree/inject.js"
+    ]
   },
   "settings": {
     "apiPathPattern": "/api/private/events",
