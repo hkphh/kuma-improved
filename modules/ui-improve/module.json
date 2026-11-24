@@ -1,0 +1,104 @@
+{
+  "id": "ui-improve",
+  "name": "UI Improve — компактная таблица событий",
+  "description": "Плотнее таблица результатов, верхняя часть страницы «События» и панель «Информация о событии»: ниже строки, мельче шрифт, разделители, компактные заголовок и окно запроса; таблица занимает остаток окна.",
+  "version": "1.6.1",
+  "defaultEnabled": true,
+  "matchPath": "/threat-hunting",
+  "runAt": "document_start",
+  "allFrames": false,
+  "files": {
+    "js": [
+      "modules/ui-improve/content.js"
+    ],
+    "css": []
+  },
+  "settings": {
+    "enabled": true,
+    "rowHeight": 24,
+    "headerHeight": 24,
+    "fontSize": 12,
+    "cellPaddingX": 6,
+    "cellPaddingY": 2,
+    "resetWidths": false,
+    "fitHeight": true,
+    "pageTitleSize": 18,
+    "queryFontSize": 11,
+    "compactDrawer": true,
+    "drawerWidth": 600
+  },
+  "settingsSchema": [
+    {
+      "key": "enabled",
+      "type": "boolean",
+      "label": "Включить компактную таблицу",
+      "hint": "Применяется только к таблице результатов на странице событий."
+    },
+    {
+      "key": "rowHeight",
+      "type": "number",
+      "label": "Высота строки, px",
+      "hint": "По умолчанию в KUMA 40px. Меньше — видно больше строк."
+    },
+    {
+      "key": "headerHeight",
+      "type": "number",
+      "label": "Высота шапки, px",
+      "hint": "По умолчанию 40px."
+    },
+    {
+      "key": "fontSize",
+      "type": "number",
+      "label": "Размер шрифта, px",
+      "hint": "Только внутри таблицы. По умолчанию в KUMA 14px."
+    },
+    {
+      "key": "cellPaddingX",
+      "type": "number",
+      "label": "Горизонтальный отступ ячейки, px",
+      "hint": "Внутренний отступ слева и справа."
+    },
+    {
+      "key": "cellPaddingY",
+      "type": "number",
+      "label": "Вертикальный отступ ячейки, px",
+      "hint": "Внутренний отступ сверху и снизу."
+    },
+    {
+      "key": "fitHeight",
+      "type": "boolean",
+      "label": "Таблица на остаток окна",
+      "hint": "Таблица занимает почти 2/3 окна вместо фиксированных 338px; окно запроса сверху при этом сжимается."
+    },
+    {
+      "key": "pageTitleSize",
+      "type": "number",
+      "label": "Заголовок «События», px",
+      "hint": "Было 28px. От него же зависят кнопки и селекты шапки страницы: 22px при 18px."
+    },
+    {
+      "key": "queryFontSize",
+      "type": "number",
+      "label": "Шрифт запроса, px",
+      "hint": "Было 12px."
+    },
+    {
+      "key": "compactDrawer",
+      "type": "boolean",
+      "label": "Компактная панель события",
+      "hint": "Список полей в панели «Информация о событии» — компактной таблицей с разделителями и полосатой подсветкой."
+    },
+    {
+      "key": "drawerWidth",
+      "type": "number",
+      "label": "Ширина панели события, px",
+      "hint": "По умолчанию в KUMA панель занимает всё место справа от меню (около 800px)."
+    },
+    {
+      "key": "resetWidths",
+      "type": "boolean",
+      "label": "Сбросить ширины столбцов",
+      "hint": "Вернуть автоподгонку ширин. Действует один раз: после сброса галочка снимается сама."
+    }
+  ]
+}
