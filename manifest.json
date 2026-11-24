@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "KUMA Improved",
-  "version": "1.6.1",
+  "version": "1.6.2",
   "description": "Модульное расширение для SIEM KUMA: дерево процессов, песочница функций, работа со временем и звуковые оповещения.",
   "minimum_chrome_version": "102",
   "permissions": ["storage", "scripting"],

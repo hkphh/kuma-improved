@@ -56,8 +56,7 @@
     pageTitleSize: 18,
     queryFontSize: 11,
     compactDrawer: true,
-    drawerWidth: 600,
-    resetWidths: false
+    drawerWidth: 600
   };
 
   let settings = { ...DEFAULT_SETTINGS };
@@ -116,8 +115,7 @@
       pageTitleSize: clampInt(src.pageTitleSize, LIMITS.pageTitleSize, DEFAULT_SETTINGS.pageTitleSize),
       queryFontSize: clampInt(src.queryFontSize, LIMITS.queryFontSize, DEFAULT_SETTINGS.queryFontSize),
       compactDrawer: src.compactDrawer !== false,
-      drawerWidth: clampInt(src.drawerWidth, LIMITS.drawerWidth, DEFAULT_SETTINGS.drawerWidth),
-      resetWidths: src.resetWidths === true
+      drawerWidth: clampInt(src.drawerWidth, LIMITS.drawerWidth, DEFAULT_SETTINGS.drawerWidth)
     };
   }
 
@@ -143,12 +141,6 @@
 
     // Закреплённые ширины живут до перезагрузки страницы.
     if (!manualWidths) manualWidths = loadColumnWidths();
-
-    // Разовая настройка «сбросить ширины» из панели расширения.
-    if (settings.resetWidths) {
-      resetWidths();
-      clearResetFlag();
-    }
 
     start();
     clearReapplyTimer();
@@ -815,19 +807,6 @@
   }
 
   /** Сброс ширин — Shift + двойной клик по границе (обрабатывается в onDoubleClick). */
-
-  /** Гасит разовую настройку «сбросить ширины» в настройках расширения. */
-  function clearResetFlag() {
-    try {
-      chrome.storage.local.get('settings').then(function (data) {
-        const settings = data && data.settings;
-        const mod = settings && settings.modules && settings.modules[MODULE_ID];
-        if (!mod || !mod.settings || mod.settings.resetWidths !== true) return;
-        mod.settings.resetWidths = false;
-        return chrome.storage.local.set({ settings: settings });
-      }).catch(function () { /* настройки ещё не созданы */ });
-    } catch (e) { /* ок */ }
-  }
 
   /**
    * Ключи столбцов KUMA в порядке отображения. Ширины KUMA хранит по этим

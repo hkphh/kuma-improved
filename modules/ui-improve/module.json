@@ -2,7 +2,7 @@
   "id": "ui-improve",
   "name": "Компактная таблица",
   "description": "Уже строки, мельче шрифт, разделители, компактные заголовок и окно запроса; таблица занимает больше места на экране.",
-  "version": "1.6.1",
+  "version": "1.6.2",
   "defaultEnabled": true,
   "matchPath": "/threat-hunting",
   "runAt": "document_start",
@@ -20,7 +20,6 @@
     "fontSize": 12,
     "cellPaddingX": 6,
     "cellPaddingY": 2,
-    "resetWidths": false,
     "fitHeight": true,
     "pageTitleSize": 18,
     "queryFontSize": 11,
@@ -67,7 +66,7 @@
     {
       "key": "fitHeight",
       "type": "boolean",
-      "label": "Таблица на остаток окна",
+      "label": "Сжать размер шапки",
       "hint": "Таблица занимает почти 2/3 окна вместо фиксированных 338px; окно запроса сверху при этом сжимается."
     },
     {
@@ -93,12 +92,6 @@
       "type": "number",
       "label": "Ширина панели события, px",
       "hint": "По умолчанию в KUMA панель занимает всё место справа от меню (около 800px)."
-    },
-    {
-      "key": "resetWidths",
-      "type": "boolean",
-      "label": "Сбросить ширины столбцов",
-      "hint": "Вернуть автоподгонку ширин. Действует один раз: после сброса галочка снимается сама."
     }
   ]
 }
