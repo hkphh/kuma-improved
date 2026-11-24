@@ -2,7 +2,7 @@
   "id": "ui-improve",
   "name": "Компактная таблица",
   "description": "Уже строки, мельче шрифт, разделители, компактные заголовок и окно запроса; таблица занимает больше места на экране.",
-  "version": "1.6.2",
+  "version": "1.7.0",
   "defaultEnabled": true,
   "matchPath": "/threat-hunting",
   "runAt": "document_start",
@@ -20,7 +20,6 @@
     "fontSize": 12,
     "cellPaddingX": 6,
     "cellPaddingY": 2,
-    "fitHeight": true,
     "pageTitleSize": 18,
     "queryFontSize": 11,
     "compactDrawer": true,
@@ -62,12 +61,6 @@
       "type": "number",
       "label": "Вертикальный отступ ячейки, px",
       "hint": "Внутренний отступ сверху и снизу."
-    },
-    {
-      "key": "fitHeight",
-      "type": "boolean",
-      "label": "Сжать размер шапки",
-      "hint": "Таблица занимает почти 2/3 окна вместо фиксированных 338px; окно запроса сверху при этом сжимается."
     },
     {
       "key": "pageTitleSize",
