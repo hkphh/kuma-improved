@@ -6,12 +6,15 @@
  *     вертикальные разделители столбцов;
  *   - верхняя часть страницы (заголовок, окно запроса, тайтл-бар)
  *     сжимается;
- *   - панель «Информация о событии» — компактная таблица ключ-значение.
+ *   - панель «Информация о событии» — компактная таблица ключ-значение,
+ *     длинные значения переносятся, а не обрезаются;
+ *   - подокно «Группы» (при группировке) — та же плотность, что и у
+ *     основной таблицы.
  *
- * Железное правило модуля: он НЕ пишет в геометрию таблицы KUMA —
- * ни в colgroup, ни в обёртку виртуального скролла, ни в position/top
- * строк, ни в высоты, которые считает сам KUMA. Поэтому здесь только
- * CSS. KUMA остаётся единственным, кто раскладывает колонки и строки.
+ * Железное правило модуля: он НЕ пишет в геометрию основной виртуальной
+ * таблицы KUMA — ни в colgroup, ни в обёртку виртуального скролла, ни в
+ * position/top строк, ни в высоты, которые считает сам KUMA. Поэтому здесь
+ * только CSS. KUMA остаётся единственным, кто раскладывает колонки и строки.
  */
 (function () {
   'use strict';
@@ -168,7 +171,7 @@
     if (key === lastStyleKey && style.textContent) return;
     lastStyleKey = key;
 
-    style.textContent = tableCss() + topBlocksCss() + (s.compactDrawer ? drawerCss() : '');
+    style.textContent = tableCss() + topBlocksCss() + (s.compactDrawer ? drawerCss() : '') + groupsCss();
   }
 
   function tableCss() {
@@ -431,6 +434,7 @@
     const content = `${root} .antd-sidebar-content`;
     const wrapper = `${content} [class*="wrapper_yNJJ4"]`;
     const rows = `${wrapper} > [class*="wrapper_"]`;
+    const extraRow = `${content} [kuma-section="extra"]`;
     const line = 'rgba(31, 41, 55, 0.16)';
     const softLine = 'rgba(31, 41, 55, 0.09)';
     const width = settings.drawerWidth;
@@ -511,17 +515,26 @@
         text-overflow: ellipsis !important;
       }
 
-      /* Колонка значения: одна строка с многоточием. */
+      /* Колонка значения: длинный текст переносится на новые строки, */
+      /* а не уходит за край. overflow-wrap спасает от длинных строк */
+      /* без пробелов (пути, команды, GUID). */
       ${rows} > :nth-child(2) {
-        display: flex !important;
-        align-items: center !important;
-        overflow: hidden !important;
-        white-space: nowrap !important;
+        display: block !important;
+        align-self: center !important;
+        overflow: visible !important;
+        white-space: normal !important;
+        overflow-wrap: anywhere !important;
+        word-break: break-word !important;
+        /* Оставляем место кнопке копирования у правого края. */
+        padding-right: 26px !important;
       }
       ${rows} > :nth-child(2) > * {
         max-width: 100% !important;
-        overflow: hidden !important;
-        text-overflow: ellipsis !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+        white-space: normal !important;
+        overflow-wrap: anywhere !important;
+        word-break: break-word !important;
       }
       ${rows} > :nth-child(2) a {
         display: inline-flex !important;
@@ -559,6 +572,59 @@
       ${rows}:nth-child(even) > :nth-child(2) { background: #fbfcfd !important; }
       ${rows}:hover > * { background: #f1f5fb !important; }
 
+      /* Секция Extra: не пара «подпись — значение», а длинный список */
+      /* полей. KUMA ставит её отдельным блоком после таблицы полей, */
+      /* поэтому стилизуем не как строку сетки, а как список на всю */
+      /* ширину панели. */
+      ${extraRow} {
+        display: block !important;
+        margin-top: 6px !important;
+        padding: 0 !important;
+        border-top: 1px solid ${softLine} !important;
+      }
+      ${extraRow} > :first-child {
+        display: inline-flex !important;
+        align-items: center !important;
+        width: auto !important;
+        height: 18px !important;
+        margin: 4px 8px 0 !important;
+        padding: 0 6px !important;
+        border-right: 0 !important;
+        border-radius: 4px !important;
+        background: #eef1f5 !important;
+        color: #4b5563 !important;
+        font-size: 11px !important;
+        line-height: 18px !important;
+        white-space: nowrap !important;
+      }
+      ${extraRow} > [kuma-section="extra-values"] {
+        display: block !important;
+        width: auto !important;
+        padding: 2px 8px 4px !important;
+        font-size: 12px !important;
+        line-height: 16px !important;
+      }
+      ${extraRow} [kuma-section="extra-event-field"] {
+        padding: 1px 0 !important;
+        border-bottom: 1px dotted ${softLine} !important;
+      }
+      ${extraRow} [kuma-section="extra-event-field"]:last-child {
+        border-bottom: 0 !important;
+      }
+      ${extraRow} [kuma-section="extra-event-field"]:nth-child(even) {
+        background: #fbfcfd !important;
+      }
+      ${extraRow} [kuma-section="extra-event-field"] pre {
+        margin: 0 !important;
+        font-size: 11px !important;
+        line-height: 15px !important;
+        white-space: pre-wrap !important;
+        overflow-wrap: anywhere !important;
+      }
+      ${extraRow} [kuma-section="extra-event-field"] pre > :first-child {
+        color: #6b7280 !important;
+      }
+
       /* Блок «Исходное событие»: компактный заголовок и сырое событие. */
       ${content} [class*="mt-32"] {
         margin-top: 14px !important;
@@ -593,6 +659,120 @@
         margin: 0 !important;
         font-size: 12px !important;
         line-height: 16px !important;
+      }
+    `;
+  }
+
+  /**
+   * Подокно «Группы», которое появляется при группировке событий.
+   * KUMA рисует его обычным antd-табличным стилем, но с крупными
+   * ячейками (14px / 39px) и высокой шапкой. Приводим «Группы» и
+   * «События группы» к плотности основной таблицы, а переключатель
+   * «Карточки / Таблица» и кнопки делаем компактнее.
+   *
+   * Геометрию панели не трогаем: её ширину задаёт сам KUMA и
+   * пользователь, перетаскивая ручку.
+   */
+  function groupsCss() {
+    const s = settings;
+    const groups = '#threat-hunting-root [class*="groupsLayout_"]';
+    const panel = `${groups} [class*="groupsPanel_"]`;
+    const panes = `${groups} :is([class*="groupsPanel_"], [class*="events_"])`;
+
+    const fontSize = s.fontSize + 'px';
+    const lineHeight = Math.max(s.fontSize + 4, s.rowHeight - s.cellPaddingY * 2) + 'px';
+    const padding = `${s.cellPaddingY}px ${s.cellPaddingX}px`;
+    const itemHeight = Math.max(20, s.rowHeight - 2);
+    const itemFont = Math.max(9, s.fontSize - 1);
+
+    return `
+      /* Заголовок «Группы (N)» — компактно, режимы просмотра рядом. */
+      ${panel} [class*="groupsHeader_"] {
+        margin: 0 8px 6px 0 !important;
+        align-items: center !important;
+      }
+      ${panel} [class*="groupsHeader_"] h5 {
+        height: 18px !important;
+        margin: 0 !important;
+        font-size: 14px !important;
+        line-height: 18px !important;
+      }
+
+      /* Переключатель «Карточки / Таблица»: значок и подпись в строку, */
+      /* иначе KUMA ставит их друг под другом и шапка раздувается. */
+      ${panel} [class*="SegmentedButtonItem"] {
+        height: ${itemHeight}px !important;
+        padding: 0 4px !important;
+      }
+      ${panel} [class*="SegmentedButtonItem"] label {
+        display: flex !important;
+        align-items: center !important;
+        gap: 4px !important;
+        height: ${itemHeight}px !important;
+        line-height: ${itemHeight}px !important;
+      }
+      ${panel} [class*="SegmentedButtonItem"] [class*="item-input"] {
+        position: absolute !important;
+        width: 1px !important;
+        height: 1px !important;
+        margin: 0 !important;
+        opacity: 0 !important;
+      }
+      ${panel} [class*="SegmentedButtonItem"] [class*="item-additional"] {
+        display: flex !important;
+        align-items: center !important;
+        height: ${Math.max(12, s.fontSize + 2)}px !important;
+      }
+      ${panel} [class*="SegmentedButtonItem"] svg {
+        width: ${s.fontSize}px !important;
+        height: ${s.fontSize}px !important;
+      }
+      ${panel} [class*="SegmentedButtonItem"] [class*="item-text"] {
+        height: auto !important;
+        font-size: ${itemFont}px !important;
+        line-height: ${itemHeight - 8}px !important;
+      }
+
+      /* Панель инструментов (TSV, поиск) над таблицей групп. */
+      ${groups} [class*="toolbar-wrapper"] {
+        height: ${s.rowHeight + 2}px !important;
+        margin-top: 2px !important;
+      }
+      ${groups} [class*="toolbar-wrapper"] .ant-btn {
+        height: ${s.rowHeight}px !important;
+        min-height: ${s.rowHeight}px !important;
+        padding: 0 8px !important;
+        font-size: ${fontSize} !important;
+      }
+      ${groups} [class*="toolbar-wrapper"] .ant-btn svg {
+        width: ${Math.max(11, s.fontSize + 1)}px !important;
+        height: ${Math.max(11, s.fontSize + 1)}px !important;
+      }
+      ${groups} [class*="toolbar-wrapper"] :is(.ant-input-affix-wrapper, .ant-input) {
+        height: ${s.rowHeight}px !important;
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+        font-size: ${fontSize} !important;
+      }
+
+      /* Сами таблицы: «Группы» и «События группы». */
+      ${panes} .ant-table-cell {
+        padding: ${padding} !important;
+        font-size: ${fontSize} !important;
+        line-height: ${lineHeight} !important;
+      }
+      ${panes} .ant-table-thead > tr > th {
+        height: ${s.headerHeight}px !important;
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+        line-height: ${Math.max(s.fontSize + 3, s.headerHeight - 6)}px !important;
+      }
+      ${panes} .ant-table-tbody > tr.ant-table-row > td {
+        height: ${s.rowHeight}px !important;
+        box-sizing: border-box !important;
+      }
+      ${panes} .ant-table-tbody > tr.ant-table-row > td .ant-table-row-indent {
+        display: none !important;
       }
     `;
   }
